@@ -1,0 +1,54 @@
+import pandas as pd
+import glob
+import os
+
+# Find all the base files
+base_files = glob.glob('*_IFRS.hdr_base_variance.csv')
+
+for base_file in base_files:
+    # Generate the corresponding target file name
+    target_file = base_file.replace('base_variance.csv', 'target_variance.csv')
+
+    # Skip this iteration if the target file does not exist
+    if not os.path.exists(target_file):
+        continue
+
+    # Load the base and target files
+    base_df = pd.read_csv(base_file, header=None)
+    target_df = pd.read_csv(target_file, header=None)
+
+    # Add column names
+    base_df.columns = [f'col{i}' for i in range(1, base_df.shape[1] + 1)]
+    target_df.columns = [f'col{i}' for i in range(1, target_df.shape[1] + 1)]
+
+    # Melt the dataframes to long format
+    base_df = base_df.melt(var_name='col', value_name='base_value')
+    target_df = target_df.melt(var_name='col', value_name='target_value')
+
+    # Add an ID column
+    base_df['id'] = base_df.index + 1
+    target_df['id'] = target_df.index + 1
+
+    # Merge the dataframes on the 'id' and 'col' columns
+    compare_df = pd.merge(base_df, target_df, on=['id', 'col'])
+
+    # Make a copy of the dataframes
+    base_copy = base_df.copy()
+    target_copy = target_df.copy()
+
+    # Filter only numeric rows for base_value and target_value
+    base_copy['base_value'] = pd.to_numeric(base_df['base_value'], errors='coerce')
+    target_copy['target_value'] = pd.to_numeric(target_df['target_value'], errors='coerce')
+
+    base_copy = base_copy[base_copy['base_value'].notnull()]
+    target_copy = target_copy[target_copy['target_value'].notnull()]
+
+    # Merge the dataframes on the 'id' and 'col' columns
+    compare_copy = pd.merge(base_copy, target_copy, on=['id', 'col'])
+
+    # Reorder columns
+    compare_copy = compare_copy[['id', 'col', 'base_value', 'target_value']]
+
+    # Save the comparison dataframe to a csv
+    compare_file = base_file.replace('base_variance.csv', 'compare.csv')
+    compare_copy.to_csv(compare_file, index=False)
